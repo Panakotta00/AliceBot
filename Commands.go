@@ -45,7 +45,8 @@ func ActivityScoreInteraction(ctx context.Context, s *discordgo.Session, i *disc
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: response,
+			Content:         response,
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		},
 	})
 }

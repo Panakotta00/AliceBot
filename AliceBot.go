@@ -18,7 +18,9 @@ import (
 	"time"
 )
 
-const QUANTIZATION_PERIOD = 24 * time.Hour
+/*
+const QUANTIZATION_PERIOD = 5 * time.Minute
+
 const EVALUATION_PERIOD = 7 * 24 * time.Hour
 const ROLE_UPDATE_PERIOD = 10 * time.Minute
 const THRESHOLD = 20
@@ -27,10 +29,18 @@ const CACHE_PERSISTENCE_PERIOD = 1 * time.Minute
 const GUILD = "876229697334296617"
 const ROLE = "977692417576816640"
 
-//const GUILD = "769084944373776415"
-//const ROLE = "977728199523983370"
-
 var MessageFilter Filter = &CategoryFilter{GuildId: GUILD, CategoryIDs: []string{"978049788383752312"}}
+*/
+
+const QUANTIZATION_PERIOD = 24 * time.Hour
+const EVALUATION_PERIOD = 7 * 24 * time.Hour
+const ROLE_UPDATE_PERIOD = 10 * time.Minute
+const THRESHOLD = 20
+const CACHE_PERSISTENCE_PERIOD = 1 * time.Minute
+const GUILD = "769084944373776415"
+const ROLE = "769085988978294794"
+
+var MessageFilter Filter = &CategoryFilter{GuildId: GUILD, CategoryIDs: []string{"769084944915890216"}}
 
 var ctx context.Context
 
@@ -117,10 +127,20 @@ func main() {
 	ctx = ctxWithDiscord(ctx, dg)
 
 	log.Println("Create Flush Ticker...")
-	flushTicker := time.NewTicker(QUANTIZATION_PERIOD)
 	killFlushTicker := make(chan bool)
 	defer func() { killFlushTicker <- true }()
-	go func() {
+	lastFlush, _ := cache.Get("lastFlush")
+	var flushTicker *time.Ticker
+	var flushStartTimer *time.Timer
+	var timeSinceLastFlush = time.Second * 0
+	if lastFlush != nil {
+		lastFlush := time.Unix(lastFlush.(int64), 0)
+		timeSinceLastFlush = time.Now().Sub(lastFlush)
+	} else {
+		_ = cache.Add("lastFlush", time.Now().Unix(), gocache.NoExpiration)
+	}
+
+	flushTickerFunc := func() {
 		for {
 			select {
 			case <-killFlushTicker:
@@ -129,7 +149,27 @@ func main() {
 				flushUsersToDB(ctx)
 			}
 		}
-	}()
+	}
+	flushStartFunc := func() {
+		select {
+		case <-killFlushTicker:
+			return
+		case <-flushStartTimer.C:
+			flushUsersToDB(ctx)
+			flushTicker = time.NewTicker(QUANTIZATION_PERIOD)
+			go flushTickerFunc()
+		}
+	}
+
+	if timeSinceLastFlush > QUANTIZATION_PERIOD || lastFlush == nil {
+		flushUsersToDB(ctx)
+		flushTicker = time.NewTicker(QUANTIZATION_PERIOD)
+		go flushTickerFunc()
+	} else {
+		fmt.Printf("Next Flush at %s\n", (time.Unix(lastFlush.(int64), 0).Add(QUANTIZATION_PERIOD)).Format("2006-01-02 15:04:05"))
+		flushStartTimer = time.NewTimer(QUANTIZATION_PERIOD - timeSinceLastFlush)
+		go flushStartFunc()
+	}
 	log.Println("Flush Tickers created.")
 
 	log.Println("Create Role Update Ticker...")
@@ -202,10 +242,11 @@ func flushUsersToDB(ctx context.Context) {
 			(user_id, message_count)
 		VALUES %s
 	`, strings.Join(insertArgs, ",")), insertValues...)
-	cache.Flush()
 	if err != nil {
 		log.Printf("Error on Flush: %+v\n", err)
 	} else {
+		cache.Flush()
+		_ = cache.Add("lastFlush", time.Now().Unix(), gocache.NoExpiration)
 		log.Println("Users flushed to DB!")
 	}
 }
@@ -275,6 +316,8 @@ func updateUserRoles(ctx context.Context) {
 				if err == nil {
 					usersToAdd = append(usersToAdd, user)
 					log.Println("Now Active:", user)
+				} else {
+					log.Printf("Failed to activate user '%s': %+v\n", user, err)
 				}
 			}
 			activeUsers[user] = false
@@ -285,8 +328,8 @@ func updateUserRoles(ctx context.Context) {
 		_, err = db.Exec(fmt.Sprintf(`
 			INSERT INTO active_user
 				(user_id)
-			VALUES (?%s)
-		`, strings.Repeat(",?", len(usersToAdd)-1)), usersToAdd...)
+			VALUES (?)%s
+		`, strings.Repeat(",(?)", len(usersToAdd)-1)), usersToAdd...)
 		if err != nil {
 			log.Printf("Error on User Role Update - Add Active Users: %+v\n", err)
 			return
@@ -300,6 +343,7 @@ func updateUserRoles(ctx context.Context) {
 			err := dg.GuildMemberRoleRemove(GUILD, user, ROLE)
 			if err != nil {
 				activeUsers[user] = false
+				log.Printf("Failed to deactivate user '%s': %+v\n", user, err)
 			} else {
 				usersToDelete = append(usersToDelete, user)
 				log.Println("Now Inactive:", user)
