@@ -30,8 +30,7 @@ var Metrics = struct {
 	LastStore time.Time
 	Data      map[string]*[]int64
 }{
-	mutex: sync.Mutex{},
-	Data:  make(map[string]*[]int64),
+	Data: make(map[string]*[]int64),
 }
 
 type IntValues []int64
@@ -91,11 +90,12 @@ func init() {
 			Name: "Alice Stats",
 			Type: discordgo.UserApplicationCommand,
 		}: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			entries := *Metrics.Data[i.Interaction.ApplicationCommandData().TargetID]
-			if entries == nil {
-				entries = slices.Repeat([]int64{0}, Settings.NumTrackedDays)
+			entriesPtr := Metrics.Data[i.Interaction.ApplicationCommandData().TargetID]
+			if entriesPtr == nil {
+				entries := slices.Repeat([]int64{0}, Settings.NumTrackedDays)
+				entriesPtr = &entries
 			}
-			entries = slices.Clone(entries)
+			entries := slices.Clone(*entriesPtr)
 
 			historyPlot, err := barChart(&entries, "Chat Stats History")
 
