@@ -61,7 +61,7 @@ func barChart(entries *[]int64, title string) (*plot.Plot, error) {
 	p.HideX()
 
 	p.Y.Min = 0
-	p.Y.Scale = SymlogScale{Base: 10, LinScale: 1, LinThresh: 10}
+	p.Y.Scale = SymlogScale{Base: 2, LinScale: 1, LinThresh: 10}
 	//p.Y.Tick.Marker = SymlogTicks{Base: 10, LinThresh: 10}
 	p.Y.Label.Text = "Msgs./Day"
 	p.Y.Label.TextStyle.Color = color.White
@@ -292,7 +292,7 @@ func analyzeMetrics() map[string]int64 {
 			s.WriteString(strconv.FormatInt(v, 10))
 			s.WriteString(" ")
 		}
-		log.Println(user, s.String())
+		//log.Println(user, s.String())
 
 		slices.Sort(entries)
 		var median int64
