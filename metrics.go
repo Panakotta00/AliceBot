@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/image/font"
@@ -25,6 +26,7 @@ import (
 )
 
 var Metrics = struct {
+	mutex     sync.Mutex
 	LastStore time.Time
 	Data      map[string]*[]int64
 }{
@@ -88,13 +90,13 @@ func init() {
 			Name: "Alice Stats",
 			Type: discordgo.UserApplicationCommand,
 		}: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			entries := Metrics.Data[i.Interaction.ApplicationCommandData().TargetID]
+			entries := *Metrics.Data[i.Interaction.ApplicationCommandData().TargetID]
 			if entries == nil {
-				entriesV := slices.Repeat([]int64{0}, Settings.NumTrackedDays)
-				entries = &entriesV
+				entries = slices.Repeat([]int64{0}, Settings.NumTrackedDays)
 			}
+			entries = slices.Clone(entries)
 
-			historyPlot, err := barChart(entries, "Chat Stats History")
+			historyPlot, err := barChart(&entries, "Chat Stats History")
 
 			img := vgimg.NewWith(vgimg.UseWH(16*vg.Centimeter, 9*vg.Centimeter), vgimg.UseBackgroundColor(color.RGBA{R: 20, G: 20, B: 24, A: 255}))
 			inner := draw.Crop(draw.New(img), 1*vg.Centimeter, -1*vg.Centimeter, 1*vg.Centimeter, -1*vg.Centimeter)
@@ -107,8 +109,8 @@ func init() {
 				return
 			}
 
-			slices.Sort(*entries)
-			sortedPlot, err := barChart(entries, "Chat Stats (Sorted)")
+			slices.Sort(entries)
+			sortedPlot, err := barChart(&entries, "Chat Stats (Sorted)")
 
 			roleTextStyle := historyPlot.Title.TextStyle
 			roleTextStyle.Handler = plot.DefaultTextHandler
@@ -224,6 +226,9 @@ func init() {
 }
 
 func addPoints(user string, points int64) {
+	Metrics.mutex.Lock()
+	defer Metrics.mutex.Unlock()
+
 	entry, ok := Metrics.Data[user]
 	if !ok {
 		entries := make([]int64, Settings.NumTrackedDays)
@@ -245,6 +250,9 @@ func metricMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func stepCumulation() {
+	Metrics.mutex.Lock()
+	defer Metrics.mutex.Unlock()
+
 	var toRemove []string
 	for user, entry := range Metrics.Data {
 		*entry = slices.Insert(*entry, 0, 0)
@@ -265,6 +273,9 @@ func stepCumulation() {
 }
 
 func loadMetrics() {
+	Metrics.mutex.Lock()
+	defer Metrics.mutex.Unlock()
+
 	b, err := os.ReadFile("metrics.gob")
 	if err == nil {
 		b := bytes.NewBuffer(b)
@@ -285,6 +296,9 @@ func loadMetrics() {
 }
 
 func storeMetrics() {
+	Metrics.mutex.Lock()
+	defer Metrics.mutex.Unlock()
+
 	Metrics.LastStore = time.Now()
 
 	var b bytes.Buffer
@@ -301,6 +315,9 @@ func storeMetrics() {
 }
 
 func analyzeMetrics() map[string]int64 {
+	Metrics.mutex.Lock()
+	defer Metrics.mutex.Unlock()
+
 	var medians = map[string]int64{}
 
 	for user, entries := range Metrics.Data {
