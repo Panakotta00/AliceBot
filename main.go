@@ -16,6 +16,10 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/robfig/cron"
+
+	_ "time/tzdata"
+
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 type Metric struct {

@@ -1,12 +1,13 @@
 module AliceBot2
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/robfig/cron v1.2.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20250904143959-9d779377cff7
 )
 
 require (
