@@ -2,11 +2,10 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob"
 	"flag"
-	"fmt"
 	"log"
 	"maps"
+	"net/http"
 	"os"
 	"os/signal"
 	"slices"
@@ -16,6 +15,10 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/robfig/cron"
+	goFont "golang.org/x/image/font"
+	"golang.org/x/image/font/sfnt"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/font"
 
 	_ "time/tzdata"
 
@@ -39,6 +42,7 @@ var dg *discordgo.Session
 var cronJobs *cron.Cron
 
 var commandCache = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){}
+var roleCache = map[string]*discordgo.Role{}
 
 func i64(v int64) *int64 { return &v }
 
@@ -47,6 +51,8 @@ func init() {
 	flag.StringVar(&app, "a", os.Getenv("DISCORD_APP"), "Application ID")
 	flag.StringVar(&guild, "g", os.Getenv("DISCORD_GUILD"), "Guild ID")
 	flag.Parse()
+
+	loadDiscordFontCache()
 }
 
 func updateAllowedChannels(dg *discordgo.Session) {
@@ -72,6 +78,18 @@ func reloadCron() {
 		log.Println(err)
 	}
 	cronJobs.Start()
+}
+
+func updateRoleCache() {
+	roleCache = map[string]*discordgo.Role{}
+	roles, err := dg.GuildRoles(guild)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	for _, role := range roles {
+		roleCache[role.ID] = role
+	}
 }
 
 func main() {
@@ -133,6 +151,7 @@ func main() {
 	}
 
 	updateAllowedChannels(dg)
+	updateRoleCache()
 
 	reloadCron()
 
@@ -146,33 +165,39 @@ func main() {
 	log.Println("Bot stopped!")
 }
 
-func test() {
-	store := Store{Metrics: make([]Metric, 0)}
-	t, _ := time.Parse("2006-01-02 15:04:05", "2006-01-02 15:04:05")
-	store.Metrics = append(store.Metrics, Metric{
-		Time:         t,
-		MessageCount: 1,
-	})
-
-	store.Metrics = slices.Collect(func(yield func(Metric) bool) {
-		for _, metric := range store.Metrics {
-			if time.Since(metric.Time) > time.Hour*24*7 {
-				continue
-			}
-			if !yield(metric) {
-				return
-			}
-		}
-	})
-
-	var b bytes.Buffer
-
-	enc := gob.NewEncoder(&b)
-	if err := enc.Encode(store); err != nil {
-		fmt.Println("Error encoding struct:", err)
-		return
+func loadDiscordFontCache() {
+	paths := []struct {
+		path   string
+		style  goFont.Style
+		weight goFont.Weight
+	}{
+		{"https://fonts.cdnfonts.com/s/93931/gg sans Regular.ttf", goFont.StyleNormal, goFont.WeightNormal},
 	}
 
-	serializedData := b.Bytes()
-	fmt.Println("Serialized data:", serializedData)
+	col := font.Collection{}
+	for _, it := range paths {
+		resp, err := http.Get(it.path)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		data := bytes.NewBuffer(nil)
+		if _, err := data.ReadFrom(resp.Body); err != nil {
+			continue
+		}
+		sf, err := sfnt.Parse(data.Bytes())
+		if err != nil {
+			continue
+		}
+		col = append(col, font.Face{
+			Face: sf,
+			Font: font.Font{
+				Typeface: "gg sans",
+				Style:    it.style,
+				Weight:   it.weight,
+			},
+		})
+	}
+
+	plot.DefaultTextHandler.Cache().Add(col)
 }
