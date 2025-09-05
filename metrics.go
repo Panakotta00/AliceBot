@@ -30,7 +30,8 @@ var Metrics = struct {
 	LastStore time.Time
 	Data      map[string]*[]int64
 }{
-	Data: make(map[string]*[]int64),
+	mutex: sync.Mutex{},
+	Data:  make(map[string]*[]int64),
 }
 
 type IntValues []int64
