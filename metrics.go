@@ -88,7 +88,7 @@ func init() {
 			Name: "Alice Stats",
 			Type: discordgo.UserApplicationCommand,
 		}: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			entries := Metrics.Data[i.Interaction.Member.User.ID]
+			entries := Metrics.Data[i.Interaction.ApplicationCommandData().TargetID]
 			if entries == nil {
 				entriesV := slices.Repeat([]int64{0}, Settings.NumTrackedDays)
 				entries = &entriesV
