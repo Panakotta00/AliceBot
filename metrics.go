@@ -199,7 +199,7 @@ func init() {
 							},
 						},
 					},
-					Flags: discordgo.MessageFlagsIsComponentsV2 | discordgo.MessageFlagsEphemeral,
+					Flags: flags,
 					Files: []*discordgo.File{
 						&discordgo.File{
 							Name:        "sorted.png",
