@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/gob"
 	"image/color"
 	"log"
@@ -76,6 +77,11 @@ func barChart(entries *[]int64, title string) (*plot.Plot, error) {
 	return p, nil
 }
 
+type RewardPair struct {
+	RoleID string
+	Target int64
+}
+
 func init() {
 	maps.Copy(commands, map[*discordgo.ApplicationCommand]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		{
@@ -107,6 +113,7 @@ func init() {
 			roleTextStyle := historyPlot.Title.TextStyle
 			roleTextStyle.Handler = plot.DefaultTextHandler
 			minRight := vg.Length(0)
+			rewards := []RewardPair{}
 			for roleId, target := range Settings.RewardRole {
 				role := roleCache[roleId]
 				if role == nil {
@@ -120,7 +127,12 @@ func init() {
 				if float64(target)+1 > sortedPlot.Y.Max {
 					sortedPlot.Y.Max = float64(target) + 1
 				}
+
+				rewards = append(rewards, RewardPair{role.ID, target})
 			}
+			slices.SortFunc(rewards, func(a, b RewardPair) int {
+				return cmp.Compare(b.Target, a.Target)
+			})
 
 			img = vgimg.NewWith(vgimg.UseWH(16*vg.Centimeter, 9*vg.Centimeter), vgimg.UseBackgroundColor(color.RGBA{R: 20, G: 20, B: 24, A: 255}))
 			inner = draw.Crop(draw.New(img), 1*vg.Centimeter, -1*vg.Centimeter-minRight, 1*vg.Centimeter, -1*vg.Centimeter)
@@ -128,7 +140,9 @@ func init() {
 
 			dataCanvas := sortedPlot.DataCanvas(inner)
 			tx, ty := sortedPlot.Transforms(&dataCanvas)
-			for roleId, target := range Settings.RewardRole {
+			for _, reward := range rewards {
+				roleId, target := reward.RoleID, reward.Target
+
 				role := roleCache[roleId]
 				if role == nil {
 					continue
@@ -155,6 +169,11 @@ func init() {
 			if _, err := png.WriteTo(&sortedBuf); err != nil {
 				log.Println(err)
 				return
+			}
+
+			flags := discordgo.MessageFlagsIsComponentsV2
+			if i.Interaction.ChannelID != "769089313546960897" {
+				flags = flags | discordgo.MessageFlagsEphemeral
 			}
 
 			err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
