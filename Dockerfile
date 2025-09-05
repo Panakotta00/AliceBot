@@ -1,4 +1,4 @@
-FROM scratch
-COPY AliceBot /AliceBot
-WORKDIR /data
-ENTRYPOINT ["/AliceBot"]
+FROM alpine
+COPY AliceBot /app/AliceBot
+WORKDIR /app/data
+ENTRYPOINT ["/app/AliceBot"]
