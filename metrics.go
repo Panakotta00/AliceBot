@@ -64,7 +64,7 @@ func barChart(entries *[]int64, title string) (*plot.Plot, error) {
 	p.HideX()
 
 	p.Y.Min = 0
-	p.Y.Scale = SymlogScale{Base: 2, LinScale: 1, LinThresh: 20}
+	p.Y.Scale = SymlogScale{Base: 2, LinScale: 1, LinThresh: 50}
 	//p.Y.Tick.Marker = SymlogTicks{Base: 10, LinThresh: 10}
 	p.Y.Label.Text = "Msgs./Day"
 	p.Y.Label.TextStyle.Color = color.White
